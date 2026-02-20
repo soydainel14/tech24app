@@ -12,6 +12,9 @@ const { errorHandler } = require('./middlewares/errorMiddleware');
 
 const app = express();
 
+// Trust proxy for Railway/Heroku/Load Balancers (required for rate-limit)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(express.json());
 app.use(helmet());
