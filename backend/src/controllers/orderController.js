@@ -1,48 +1,73 @@
-const db = require('../db/connection');
+const orderModel = require('../models/orderModel');
 
-async function confirmPayment(orderId) {
-  return db.transaction(async (trx) => {
-    // 1) Traer orden
-    const order = await trx('orders').where({ id: orderId }).first();
-    if (!order) throw new Error('Order not found');
-    if (order.payment_status === 'confirmed') throw new Error('Payment already confirmed');
-
-    // 2) Traer items
-    const items = await trx('order_items').where({ order_id: orderId });
-
-    // 3) Confirmar payment + actualizar order
-    await trx('payments')
-      .where({ order_id: orderId })
-      .update({ status: 'confirmed', updated_at: trx.fn.now() });
-
-    await trx('orders')
-      .where({ id: orderId })
-      .update({ payment_status: 'confirmed', updated_at: trx.fn.now() });
-
-    // 4) Descontar stock + registrar movimiento
-    for (const item of items) {
-      // a) descontar stock
-      await trx('products')
-        .where({ id: item.product_id })
-        .decrement('stock', item.quantity);
-
-      // b) registrar auditoría de inventario
-      await trx('inventory_movements').insert({
-        product_id: item.product_id,
-        type: 'out',
-        quantity: item.quantity,
-        reason: `order:${orderId} payment_confirmed`,
-      });
+/**
+ * Create a new order for the authenticated user.
+ */
+async function createOrder(req, res, next) {
+  try {
+    const { items, paymentMethod, shippingAddressId } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'Items are required' });
     }
+    const order = await orderModel.createOrder({
+      userId: req.user.id,
+      items,
+      paymentMethod,
+      shippingAddressId
+    });
+    res.status(201).json(order);
+  } catch (err) {
+    next(err);
+  }
+}
 
-    // 5) devolver orden actualizada con items (igual que antes)
-    const updatedOrder = await trx('orders').where({ id: orderId }).first();
-    updatedOrder.items = items;
-    return updatedOrder;
-  });
+/**
+ * Get details of a specific order.
+ */
+async function getOrder(req, res, next) {
+  try {
+    const order = await orderModel.getOrderById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    // Only the owner or an admin can see the order
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    res.json(order);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get all orders for the authenticated user.
+ */
+async function getMyOrders(req, res, next) {
+  try {
+    const db = require('../db/connection');
+    const orders = await db('orders').where({ user_id: req.user.id }).orderBy('created_at', 'desc');
+    res.json(orders);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Confirm payment for an order (Admin only).
+ */
+async function confirmPayment(req, res, next) {
+  try {
+    const order = await orderModel.confirmPayment(req.params.id);
+    res.json(order);
+  } catch (err) {
+    next(err);
+  }
 }
 
 module.exports = {
-  // ...otras funciones
+  createOrder,
+  getOrder,
+  getMyOrders,
   confirmPayment,
 };
