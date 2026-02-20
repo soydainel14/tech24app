@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Tech24.do",
+    "slug": "tech24do",
+    "version": "1.0.0",
+    "sdkVersion": "49.0.0",
+    "platforms": ["ios", "android", "web"],
+    "extra": {
+      "apiUrl": "http://localhost:3001/api/v1"
+    }
+  }
+}
