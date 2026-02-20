@@ -1,10 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
-/**
- * Builds the database connection object based on environment variables.
- * Prioritizes DATABASE_URL (Railway) or specific MYSQLHOST/DB_HOST vars.
- */
 function buildConnection() {
   if (process.env.DATABASE_URL) {
     return {
@@ -12,7 +8,6 @@ function buildConnection() {
     };
   }
 
-  // Fallback to specific variables, ensuring no default 'localhost' in production
   const host = process.env.MYSQLHOST || process.env.DB_HOST;
   const port = process.env.MYSQLPORT || process.env.DB_PORT || 3306;
   const user = process.env.MYSQLUSER || process.env.DB_USER;
@@ -27,17 +22,19 @@ function buildConnection() {
     connection: {
       host: host || 'localhost',
       port: Number(port),
-      user: user,
-      password: password,
-      database: database,
+      user,
+      password,
+      database,
       charset: 'utf8mb4',
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
     },
   };
 }
 
-const baseConfig = {
+const commonConfig = {
   client: 'mysql2',
-  ...buildConnection(),
   migrations: {
     directory: path.join(__dirname, '..', 'migrations'),
     tableName: 'migrations',
@@ -47,15 +44,20 @@ const baseConfig = {
   },
   pool: {
     min: 2,
-    max: 10
-  }
+    max: 5,
+    acquireTimeoutMillis: 10000,
+    createTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+  },
 };
 
 module.exports = {
-  development: baseConfig,
+  development: {
+    ...commonConfig,
+    ...buildConnection(),
+  },
   production: {
-    ...baseConfig,
-    // Ensure production always uses the dynamic connection
-    ...buildConnection()
+    ...commonConfig,
+    ...buildConnection(),
   },
 };
