@@ -46,6 +46,20 @@ app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
+// Root route
+app.get('/', (_req, res) => {
+  res.json({ 
+    message: 'Tech24 API is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/v1/auth',
+      products: '/api/v1/products',
+      orders: '/api/v1/orders'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
